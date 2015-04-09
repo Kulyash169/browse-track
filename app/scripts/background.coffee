@@ -1,9 +1,6 @@
 'use strict';
 
 chrome.runtime.onInstalled.addListener (details) ->
-  console.log('previousVersion', details.previousVersion)
-
-chrome.browserAction.setBadgeText({text: '+15'})
 
 Stat =
   data: {}
@@ -17,6 +14,7 @@ tabChanged = (url) ->
   lst = Stat.data[url] or []
   lst.push(new Date())
   Stat.data[url] = lst
+  return Stat.data[url]
 
 calc = (url)->
   lst = Stat.data[url]
@@ -30,27 +28,61 @@ calc = (url)->
   res += (new Date()).getTime() - lst[lst.length - 1].getTime()
   return res
 
-updateBadge = (url)->
-  res = calc url
-  chrome.browserAction.setBadgeText({text: "#{res / 1000}"})
+updateBadge = (url,sec)->
+  if (sec>0)
+    res = parseInt(sec)
+    res +=1
+    s = res % 60
+    m = Math.floor (res / 60) % 60
+    h = Math.floor (res / 3600) % 24
+    chrome.browserAction.setBadgeText({text: "#{m}:#{s}"})
+
+  else
+    res = calc url
+    s = Math.floor(res / 1000) % 60
+    m = Math.floor(res / 60000) % 60
+    h = Math.floor(res / 3600000) % 24
+    chrome.browserAction.setBadgeText({text: "#{m}:#{s}"})
+    
+  localStorage.setItem(url,res)
+
+ 
+
+getDomain = (url) ->
+  myDomain = document.createElement "a"
+  myDomain.href = url
+  console.log "domain = "+ myDomain.hostname
+  return myDomain.hostname
+
+# isNecessaryProtocol = (url) ->
+#   urlProtocol = document.createElement "a"
+#   urlProtocol.href = url
+#   if (urlProtocol.protocol == "http:" || urlProtocol.protocol == "https:")
+#     return true
+#   else 
+#     return false
 
 
 chrome.tabs.onActivated.addListener (activeInfo)->
-  console.log "Select #{activeInfo.tabId} "
   Stat.curTabId = activeInfo.tabId
   chrome.tabs.get activeInfo.tabId, (tab) ->
-    tabChanged(tab.url) if tab.url
-    updateBadge tab.url
+    myDomain = document.createElement "a"
+    myDomain.href = tab.url
+    if (myDomain.protocol == "http:" || myDomain.protocol == "https:")
+      console.log "prowel proverku"
+      domain = getDomain tab.url 
+      tabChanged(domain) if domain
+      updateBadge domain, localStorage.getItem(domain)
 
-chrome.alarms.onAlarm.addListener (alarm)->
-  console.log alarm, Stat.curTabId
-  if alarm.name == "update"
-    if not Stat.curTabId
+
+timer = () ->
+  if not Stat.curTabId
       return
     chrome.tabs.get Stat.curTabId, (tab)->
-      console.log tab
-      if tab.url
-        updateBadge tab.url
+      domain = getDomain tab.url 
+      if domain
+        updateBadge domain,localStorage.getItem(domain)
 
-chrome.alarms.create("update", {periodInMinutes: 0.1})
-console.log('\'Allo \'Allo! Event Page for Browser Action')
+
+
+setInterval(timer, 1000)
